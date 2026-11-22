@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Foreman — Wallet Connector</title>
+<link rel="stylesheet" href="./app.css" />
+<style>
+  .wgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:14px}
+  .wcard{background:#0b1016;border:1px solid var(--line);border-radius:12px;padding:16px}
+  .wcard h3{margin:0 0 8px;font-size:16px}
+  .addr{word-break:break-all;font-family:var(--mono);font-size:12px;background:#070b10;border:1px solid var(--line);border-radius:8px;padding:10px}
+  .step{margin:8px 0;color:var(--dim);font-size:14px;line-height:1.6}
+  .ok{color:var(--ok)}
+</style>
+</head>
+<body>
+<div class="banner">
+  <span class="pill">BCH BLAZE 2026</span>
+  <span><b>Foreman</b> — Wallet Connector</span>
+  <a href="./index.html">Live Demo</a>
+  <a href="./docs/presentation.html" target="_blank">Slides</a>
+  <a href="https://github.com/Eren-dotcom/foreman" target="_blank" rel="noopener">GitHub Repo</a>
+  <span>EMBER2026: <code>bitcoincash:zqcj6f9nx5ce6q3e469nge8hmlsu3uv2gshqpqxjg9</code></span>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <h1><span class="brand">Connect your wallet</span> — your keys, your signature</h1>
+    <p class="lede">Foreman never custodies funds. The covenant holds the budget; your wallet only signs.
+    Pick any connector below — they all end at the same ChunkPod.</p>
+  </header>
+
+  <div class="wgrid">
+    <section class="wcard">
+      <h3>1 · WizardConnect <span class="tag">wiz://</span></h3>
+      <p class="step">The full signing path, proven on Chipnet (tx <span class="mono">c47e0d6e…</span>).</p>
+      <p class="step">1. Open the <a href="./index.html#wallet">live demo wallet card</a> in the full server app (<span class="mono">node server.mjs</span>).</p>
+      <p class="step">2. Press <b>Pair a wallet</b> and scan the QR with Cake Wallet, Cashonize, Zapit or any WizardConnect wallet.</p>
+      <p class="step">3. Press <b>Fund this pod from my wallet</b>. The server builds the tx, your phone signs it over the relay, the server verifies the pod output is exactly the amount requested, then broadcasts. A wallet that signs anything else gets a 400 — nothing is sent.</p>
+      <a href="./index.html#wallet"><button>Go to pairing</button></a>
+    </section>
+
+    <section class="wcard">
+      <h3>2 · XO Template <span class="tag">XO.cash</span></h3>
+      <p class="step">The same covenant as an XO wallet template, validated by the XO engine.</p>
+      <p class="step">Template ID: <span class="mono">6bc7202420bc83f5…</span><br/>Roles: client + provider.<br/>Transactions: fund · pull a chunk · refund.</p>
+      <p class="step">Import <span class="mono">xo/foreman.pod.template.json</span> from the repo into XO and sign with XO's own flow.</p>
+      <a href="https://github.com/Eren-dotcom/foreman/tree/main/xo" target="_blank" rel="noopener"><button class="ghost">Open XO template</button></a>
+    </section>
+
+    <section class="wcard">
+      <h3>3 · Paytaca / Selene / any BCH wallet</h3>
+      <p class="step">No special integration needed to fund a pod: create a pod in the demo's Advanced section, copy its pod address, and send BCH to it directly from Paytaca, Selene, or any standard BCH wallet. The covenant rules apply the moment the coins land in the pod.</p>
+      <p class="step">For Community Choice, send EMBER2026 tokens to:</p>
+      <div class="addr" id="ember-addr">bitcoincash:zqcj6f9nx5ce6q3e469nge8hmlsu3uv2gshqpqxjg9</div>
+      <div class="row" style="margin-top:10px">
+        <a href="bitcoincash:zqcj6f9nx5ce6q3e469nge8hmlsu3uv2gshqpqxjg9"><button class="ghost">Open in wallet</button></a>
+        <button class="ghost" id="btn-copy">Copy address</button>
+      </div>
+      <div class="hint" id="copy-note"></div>
+    </section>
+
+    <section class="wcard">
+      <h3>4 · xpub — read-only</h3>
+      <p class="step">No phone handy? Paste an account xpub in the demo's wallet card and Foreman derives the same receive addresses read-only — enough to check balances and fund a pod, never enough to sign.</p>
+      <a href="./index.html#wallet"><button class="ghost">Use xpub in demo</button></a>
+      <p class="step" style="margin-top:12px"><span class="ok">Mainnet:</span> set Chain = mainnet when you create the pod, pair a wallet above, and fund it — that sends a real BCH mainnet transaction, signed by your wallet only.</p>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:16px">
+    <h2>What the connector guarantees</h2>
+    <table><tbody>
+      <tr><td class="mono">Server never sees a private key</td><td>Signing happens on your phone / in your wallet, over the relay.</td></tr>
+      <tr><td class="mono">Verify before broadcast</td><td>Returned bytes are decoded and checked: all signatures valid, pod output exactly the requested amount. Anything else = 400, no broadcast. Tested against a dishonest wallet in <span class="mono">tests/WalletGuard.test.mjs</span> (16/16).</td></tr>
+      <tr><td class="mono">Covenant is the authority</td><td>Even a perfectly signed wallet transaction cannot exceed the window, redirect the payee, or refund early — the VM refuses it.</td></tr>
+    </tbody></table>
+  </section>
+
+  <footer>Foreman · BCH BLAZE 2026 · <a href="./index.html">live demo</a> · <a href="https://github.com/Eren-dotcom/foreman">repo</a></footer>
+</div>
+<script>
+  document.getElementById('btn-copy').onclick = async () => {
+    try { await navigator.clipboard.writeText(document.getElementById('ember-addr').textContent.trim()); document.getElementById('copy-note').textContent = 'Copied.'; }
+    catch { document.getElementById('copy-note').textContent = 'Copy failed — long-press the address instead.'; }
+  };
+</script>
+</body>
+</html>

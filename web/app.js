@@ -14,6 +14,287 @@ const log = (msg, cls = '') => {
 let EXPLORER = 'https://chipnet.imaginary.cash/tx/';
 let pod = null;
 
+// ---------------------------------------------------------------------------
+// Static demo engine (added 2026-11-22 fix)
+// GitHub Pages has no server, so every /api/* call used to fail there and the
+// buttons looked dead. This interceptor tries the real server first; if the
+// answer is not JSON (Pages 404) it activates an in-browser engine that
+// enforces the same covenant rules locally — whole chunks, window cap, pinned
+// payee, no early refund — with simulated Chipnet transactions. It is labelled
+// as simulation wherever it appears; `node server.mjs` remains the live path.
+// ---------------------------------------------------------------------------
+const _realFetch = window.fetch.bind(window);
+let _staticMode = false;
+const _DEMO_CLIENT = 'bchtest:zq7zalxf3ctg7yca6kt4r6yt78c3q2tnkq9d698dxu';
+const _DEMO_PROVIDER = 'bchtest:zryvhfcez33j6azvajhe9ud3qrjm0vju9y45clsfht';
+const _sim = {
+  height: 340020,
+  pods: new Map(), order: [], preceipts: new Map(),
+  wallet: { started: false, connected: false, uri: null, startedAt: 0, xpub: null, balance: 250000, name: null, events: [] },
+};
+const _hex = (n) => [...crypto.getRandomValues(new Uint8Array(n))].map((b) => b.toString(16).padStart(2, '0')).join('');
+const _txid = () => _hex(32);
+const _podAddr = () => 'bchtest:p' + _hex(20);
+const _ok = (obj) => new Response(JSON.stringify(obj), { status: 200, headers: { 'content-type': 'application/json' } });
+const _fail = (status, error, explain, extra = {}) => new Response(
+  JSON.stringify({ error, refused: Boolean(explain), explain: explain || { rule: null, text: '' }, ...extra }),
+  { status, headers: { 'content-type': 'application/json' } },
+);
+const _hashStr = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(16).padStart(8, '0'); };
+
+function _podState(j) {
+  const expired = _sim.height >= j.validUntil;
+  return {
+    id: j.id, address: j.address, chunk: j.chunk, window: j.window, validUntil: String(j.validUntil),
+    description: j.description, network: j.network, createdAt: j.createdAt, events: j.events, receipts: j.receipts,
+    live: {
+      balance: String(j.balance), address: j.address, blockHeight: _sim.height,
+      expired, blocksToExpiry: Math.max(0, j.validUntil - _sim.height), utxos: j.balance > 0 ? 1 : 0,
+    },
+  };
+}
+function _podListItem(j) {
+  const s = _podState(j);
+  return {
+    ...s, balance: String(j.balance), blockHeight: _sim.height, expired: s.live.expired,
+    blocksToExpiry: s.live.blocksToExpiry, blocks: Math.max(0, j.validUntil - _sim.height),
+    explorer: EXPLORER, fundedTxid: j.events.find((e) => e.kind === 'fund')?.txid ?? null,
+  };
+}
+function _judge(j, intent) {
+  const amount = BigInt(intent.amount ?? 0);
+  const chunk = BigInt(j.chunk), win = BigInt(j.window), bal = BigInt(j.balance);
+  const rules = [];
+  const whole = amount > 0n && amount % chunk === 0n;
+  rules.push({ code: 'deliver.whole-chunks', outcome: whole ? 'pass' : 'deny' });
+  const within = amount <= win;
+  rules.push({ code: 'deliver.window', outcome: within ? 'pass' : 'deny' });
+  const payeeOk = !intent.payTo || intent.payTo === j.providerAddress;
+  rules.push({ code: 'deliver.payee', outcome: payeeOk ? 'pass' : 'deny' });
+  const funded = amount + 700n <= bal;
+  rules.push({ code: 'pod.balance', outcome: bal > 0n ? (funded ? 'pass' : 'deny') : 'skipped' });
+  let decision = 'pass', code = null, reason = 'this intent satisfies every covenant rule';
+  if (!whole) { decision = 'deny'; code = 'deliver.whole-chunks'; reason = `this would move ${amount} sat; the pod pays whole chunks of ${chunk} sat only`; }
+  else if (!within) { decision = 'deny'; code = 'deliver.window'; reason = `this would move ${amount} sat in one transaction; the window is ${win} sat`; }
+  else if (!payeeOk) { decision = 'deny'; code = 'deliver.payee'; reason = 'the payee is pinned to the named provider by the covenant'; }
+  else if (!funded) { decision = 'deny'; code = 'pod.balance'; reason = `the pod holds ${bal} sat; this pull plus the 700 sat fee exceeds it`; }
+  return {
+    decision, code, reason, rules,
+    effect: { balanceBefore: String(bal), balanceAfter: String(decision === 'pass' ? bal - amount - 700n : bal) },
+  };
+}
+function _walletStatus() {
+  const w = _sim.wallet;
+  if (w.started && !w.connected && Date.now() - w.startedAt > 3000) {
+    w.connected = true; w.name = 'Demo Wallet (static simulation)';
+    w.events.push({ at: new Date().toISOString(), message: 'paired with Demo Wallet (static simulation)' });
+  }
+  return {
+    started: w.started, connected: w.connected, uri: w.uri,
+    wallet: w.connected ? { name: w.name } : null,
+    mode: w.connected ? 'wallet-signs' : (w.xpub ? 'xpub-read-only' : 'paired-none'),
+    startedAt: w.startedAt ? new Date(w.startedAt).toISOString() : null,
+    events: w.events.slice(-10), network: 'chipnet',
+  };
+}
+async function _localApi(pathname, method, body) {
+  const seg = pathname.split('/api/')[1].split('/').filter(Boolean);
+  try {
+    if (seg[0] === 'health') return _ok({ ok: true, network: 'chipnet', client: _DEMO_CLIENT, provider: _DEMO_PROVIDER });
+    if (seg[0] === 'evidence') {
+      const [demo, batch, contract] = await Promise.all([
+        _realFetch('./data.json').then((r) => r.json()).catch(() => null),
+        _realFetch('./batch.json').then((r) => r.json()).catch(() => null),
+        _realFetch('./contract.json').then((r) => r.json()).catch(() => null),
+      ]);
+      return _ok({ demo, batch, contract });
+    }
+    if (seg[0] === 'phases') return _ok(await _realFetch('./phases.json').then((r) => r.json()));
+    if (seg[0] === 'rules') return _ok([
+      { id: 'deliver.window', text: 'Provider pull must not exceed the per-transaction window', guard: true },
+      { id: 'deliver.whole-chunks', text: 'Whole chunks only — no partial chunk payments', guard: true },
+      { id: 'deliver.payee', text: 'Payee is pinned to the named provider', guard: true },
+      { id: 'deliver.single-input', text: 'One pod per transaction — pods cannot be merged', guard: false },
+      { id: 'refund.not-expired', text: 'Client refund only after the authority expires', guard: true },
+      { id: 'close.both-sign', text: 'Close needs both signatures and an exact split', guard: false },
+    ]);
+    if (seg[0] === 'preceipts') return _ok({ preceipts: [..._sim.preceipts.values()].reverse(), executedIntents: [] });
+    if (seg[0] === 'reconcile') {
+      const pods = _sim.order.map((id) => _sim.pods.get(id)).filter(Boolean).map((j) => ({
+        pod: j.id, network: j.network,
+        chain: {
+          fundedSats: String(j.funded), paidToProvider: String(j.paidTotal), feesPaid: String(j.fees),
+          refundedToClient: String(j.refunded), heldNow: String(j.balance),
+          txsExamined: j.events.filter((e) => e.txid).length, deliveries: j.receipts.length,
+          closingTxs: j.events.filter((e) => e.kind === 'close' || e.kind === 'refund').length,
+          topUps: Math.max(0, j.events.filter((e) => e.kind === 'fund').length - 1), balancesToTheSatoshi: true,
+        },
+        ledger: { fundedSats: String(j.funded), paidSats: String(j.paidTotal), unbookedPayouts: [] },
+        verdict: 'books agree with the ledger (static demo — the chain walk runs in the full server app)',
+      }));
+      return _ok({
+        reconciledAt: new Date().toISOString(), pods,
+        totals: { pods: pods.length, balanceToTheSatoshi: pods.length, booksAgree: pods.length, unbookedPayouts: 0 },
+      });
+    }
+    if (seg[0] === 'verify') return _ok({ verified: true, txid: seg[1], note: 'static demo — open the explorer link to check this txid on chain' });
+    if (seg[0] === 'wallet') {
+      const w = _sim.wallet;
+      if (seg[1] === 'status') return _ok(_walletStatus());
+      if (seg[1] === 'connect') {
+        if (!w.started) {
+          w.started = true; w.startedAt = Date.now(); w.uri = 'wiz://foreman-static-demo-' + _hex(4);
+          w.events.push({ at: new Date().toISOString(), message: 'relay session opened (static simulation — a demo wallet pairs automatically in a few seconds)' });
+        }
+        const qr = `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><rect width="180" height="180" fill="#fff"/><g fill="#000">${Array.from({ length: 60 }, (_, i) => `<rect x="${15 + (i % 10) * 15}" y="${15 + Math.floor(i / 10) * 15}" width="12" height="12" opacity="${((i * 37) % 3) / 2}"/>`).join('')}</g><text x="90" y="172" font-size="9" text-anchor="middle" fill="#000">STATIC DEMO QR</text></svg>`;
+        return _ok({ ..._walletStatus(), qr, uri: w.uri });
+      }
+      if (seg[1] === 'disconnect') { _sim.wallet = { started: false, connected: false, uri: null, startedAt: 0, xpub: null, balance: 250000, name: null, events: [] }; return _ok(_walletStatus()); }
+      if (seg[1] === 'xpub') {
+        const xpub = String(body?.xpub ?? '').trim();
+        if (xpub.length < 20) return _fail(400, 'that does not look like an xpub');
+        w.xpub = xpub;
+        const addresses = [0, 1, 2, 3].map((i) => 'bchtest:q' + _hashStr(xpub + i).repeat(5).slice(0, 38));
+        return _ok({ ..._walletStatus(), addresses });
+      }
+      if (seg[1] === 'utxos') {
+        const st = _walletStatus();
+        if (!st.connected && !w.xpub) return _fail(400, 'pair a wallet first');
+        const first = 'bchtest:q' + _hex(20).slice(0, 38);
+        const addresses = st.connected
+          ? [{ address: first, index: '0', balance: String(w.balance), utxos: 1 }, { address: 'bchtest:q' + _hex(20).slice(0, 38), index: '1', balance: '0', utxos: 0 }]
+          : [0, 1, 2, 3].map((i) => ({ address: 'bchtest:q' + _hashStr(w.xpub + i).repeat(5).slice(0, 38), index: String(i), balance: '0', utxos: 0 }));
+        return _ok({ chain: 'chipnet', addresses, total: addresses.reduce((a, x) => a + BigInt(x.balance), 0n).toString() });
+      }
+    }
+    if (seg[0] === 'pods') {
+      if (seg.length === 1 && method === 'GET') return _ok({ pods: _sim.order.map((id) => _podListItem(_sim.pods.get(id))), network: 'chipnet' });
+      if (seg.length === 1 && method === 'POST') {
+        const chunk = BigInt(body?.chunk ?? 20000), win = BigInt(body?.window ?? 60000), blocks = Number(body?.blocks ?? 24);
+        if (chunk <= 0n) return _fail(400, 'chunk must be positive');
+        if (win < chunk) return _fail(400, 'the window must be at least one chunk');
+        if (win % chunk !== 0n) return _fail(400, 'window must be a whole multiple of the chunk price');
+        const j = {
+          id: 'job_' + _hex(4), address: _podAddr(), chunk: String(chunk), window: String(win),
+          validUntil: _sim.height + blocks, description: body?.description ?? 'Agent job',
+          network: body?.chain === 'mainnet' ? 'mainnet' : 'chipnet',
+          providerAddress: body?.provider || _DEMO_PROVIDER,
+          balance: 0n, funded: 0n, paidTotal: 0n, fees: 0n, refunded: 0n,
+          events: [], receipts: [], createdAt: new Date().toISOString(),
+        };
+        _sim.pods.set(j.id, j); _sim.order.push(j.id);
+        return _ok(_podState(j));
+      }
+      const j = _sim.pods.get(seg[1]);
+      if (!j) return _fail(404, 'unknown pod');
+      if (seg.length === 2 && method === 'GET') return _ok(_podState(j));
+      if (seg[2] === 'reconcile') return _ok({ pod: j.id, network: j.network, chain: { fundedSats: String(j.funded), paidToProvider: String(j.paidTotal), feesPaid: String(j.fees), refundedToClient: String(j.refunded), heldNow: String(j.balance), balancesToTheSatoshi: true }, ledger: { fundedSats: String(j.funded), paidSats: String(j.paidTotal), unbookedPayouts: [] }, verdict: 'books agree (static demo)' });
+      const action = seg[2];
+      _sim.height += 1; // one simulated block per action
+      if (action === 'fund') {
+        if (j.network === 'mainnet') return _fail(400, 'this pod is on mainnet and the demo keys hold no real BCH — connect your wallet and use fund-wallet');
+        const sats = BigInt(body?.satoshis ?? 100000);
+        j.balance += sats; j.funded += sats;
+        const txid = _txid();
+        j.events.push({ kind: 'fund', txid, satoshis: String(sats), at: new Date().toISOString() });
+        return _ok({ txid, explorer: EXPLORER + txid, state: _podState(j) });
+      }
+      if (action === 'fund-wallet') {
+        const st = _walletStatus();
+        if (!st.connected) return _fail(400, 'no wallet paired — pair a wallet first');
+        const sats = BigInt(body?.satoshis ?? 100000);
+        if (sats + 236n > BigInt(_sim.wallet.balance)) return _fail(400, 'the demo wallet does not hold enough for that');
+        _sim.wallet.balance -= Number(sats) + 236;
+        j.balance += sats; j.funded += sats;
+        const txid = _txid();
+        j.events.push({ kind: 'fund', txid, satoshis: String(sats), signedBy: 'wallet', at: new Date().toISOString() });
+        return _ok({ txid, explorer: EXPLORER + txid, signedBy: 'wallet', fee: '236', change: String(_sim.wallet.balance), state: _podState(j) });
+      }
+      if (action === 'deliver') {
+        const chunks = BigInt(body?.chunks ?? 1);
+        if (chunks < 1n) return _fail(400, 'chunks must be at least 1');
+        const paid = chunks * BigInt(j.chunk);
+        const verdict = _judge(j, { action: 'deliver', amount: String(paid) });
+        if (verdict.decision === 'deny') {
+          return _fail(400, verdict.reason, { rule: verdict.code, line: verdict.code === 'deliver.window' ? 44 : null, text: verdict.reason },
+            { guard: { code: verdict.code, reason: verdict.reason, verdict: 'deny', hash: _hex(32) } });
+        }
+        j.balance -= paid + 700n; j.paidTotal += paid; j.fees += 700n;
+        const txid = _txid();
+        const receipt = { jobHash: _hex(32), index: j.receipts.length, payloadHash: _hex(32), txid, paidSats: String(paid), hash: _hex(32) };
+        j.receipts.push(receipt);
+        j.events.push({ kind: 'deliver', txid, paid: String(paid), chunks: String(chunks), at: new Date().toISOString() });
+        return _ok({ txid, paid: String(paid), explorer: EXPLORER + txid, receipt, state: _podState(j) });
+      }
+      if (action === 'steal') {
+        const want = BigInt(body?.chunks ?? 4), paid = want * BigInt(j.chunk);
+        if (paid > BigInt(j.window)) {
+          j.events.push({ kind: 'refuse', rule: 'deliver.window', line: 44, at: new Date().toISOString() });
+          return _ok({ refused: true, explain: { rule: 'deliver.window', line: 44, text: 'This pull exceeds the per-transaction window. The blast radius is capped by the covenant.' } });
+        }
+        return _ok({ refused: false, explain: { rule: null, text: 'within the window — the covenant would allow this pull' } });
+      }
+      if (action === 'early-refund') {
+        j.events.push({ kind: 'refuse', rule: 'refund.not-expired', line: 64, at: new Date().toISOString() });
+        return _ok({ refused: true, message: 'Refused by the covenant: refund is only available after expiry (refund.not-expired, ChunkPod.cash:64)', explain: { rule: 'refund.not-expired', line: 64, text: 'Authority has not expired yet.' } });
+      }
+      if (action === 'refund') {
+        if (_sim.height < j.validUntil) return _fail(400, 'refund refused: authority has not expired', { rule: 'refund.not-expired', line: 64, text: 'Authority has not expired yet.' });
+        const amt = j.balance - 600n;
+        if (amt < 0n) return _fail(400, 'nothing left to refund');
+        j.refunded += amt; j.fees += 600n; j.balance = 0n;
+        const txid = _txid();
+        j.events.push({ kind: 'refund', txid, at: new Date().toISOString() });
+        return _ok({ txid, explorer: EXPLORER + txid, state: _podState(j) });
+      }
+      if (action === 'close') {
+        const chunks = BigInt(body?.chunks ?? 1), paid = chunks * BigInt(j.chunk);
+        if (paid + 800n > j.balance) return _fail(400, 'close refused: the pod does not hold enough for that final chunk plus the fee', { rule: 'close.insufficient', line: null, text: 'held must cover paid + CLOSE_FEE' });
+        const rest = j.balance - paid - 800n;
+        j.paidTotal += paid; j.refunded += rest; j.fees += 800n; j.balance = 0n;
+        const txid = _txid();
+        if (paid > 0n) j.receipts.push({ jobHash: _hex(32), index: j.receipts.length, payloadHash: _hex(32), txid, paidSats: String(paid), hash: _hex(32) });
+        j.events.push({ kind: 'close', txid, paid: String(paid), at: new Date().toISOString() });
+        return _ok({ txid, explorer: EXPLORER + txid, state: _podState(j) });
+      }
+      if (action === 'intent') {
+        const intent = { ...(body ?? {}), pod: j.address };
+        if (!intent.id) intent.id = 'int_' + _hashStr(JSON.stringify([intent.action, intent.amount, intent.payTo, j.id]));
+        const prior = _sim.preceipts.get(intent.id);
+        if (prior) return _ok({ ...prior, duplicate: true });
+        const verdict = _judge(j, intent);
+        const pre = {
+          kind: 'preceipt', pod: j.id, intent, verdict: verdict.decision, code: verdict.code,
+          reason: verdict.reason, effect: verdict.effect, rules: verdict.rules, hash: _hex(32),
+          decidedAt: new Date().toISOString(),
+        };
+        _sim.preceipts.set(intent.id, pre);
+        return _ok(pre);
+      }
+    }
+    return _fail(404, 'not found in static demo', null, { path: pathname });
+  } catch (e) {
+    return _fail(500, e.message);
+  }
+}
+window.fetch = async (input, opts = {}) => {
+  const url = typeof input === 'string' ? input : input.url;
+  let u;
+  try { u = new URL(url, location.href); } catch { return _realFetch(input, opts); }
+  if (!u.pathname.includes('/api/')) return _realFetch(input, opts);
+  if (!_staticMode) {
+    try {
+      const r = await _realFetch(input, opts);
+      if ((r.headers.get('content-type') || '').includes('application/json')) return r;
+    } catch { /* fall through to static engine */ }
+    _staticMode = true;
+    setTimeout(() => { try { log('static demo mode — no server here, so every function now runs in your browser with simulated Chipnet transactions. Run "node server.mjs" from the repo for live on-chain transactions.', 'hi'); } catch { /* console not ready */ } }, 600);
+  }
+  let body = null;
+  if (opts.body) { try { body = JSON.parse(opts.body); } catch { body = null; } }
+  return _localApi(u.pathname, (opts.method || 'GET').toUpperCase(), body);
+};
+
 // ---------------------------------------------------------------- evidence
 async function loadEvidence() {
   let demo, batch, contract;

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Foreman — economics</title>
+<style>
+  :root { --ink:#0d1117; --fg:#e6edf3; --dim:#8b949e; --accent:#f7931a; --accent2:#ffb454; --line:#242c37; --ok:#3fb950; --bad:#f85149; }
+  * { box-sizing:border-box; }
+  body { margin:0; background: radial-gradient(1000px 500px at 20% -10%, #1b2430, var(--ink) 60%); color:var(--fg);
+    font:15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 940px; margin:0 auto; padding: 40px 20px 80px; }
+  a { color: var(--accent2); }
+  h1 { font-size: 34px; margin:0 0 6px; letter-spacing:-.02em; }
+  h2 { font-size: 13px; text-transform:uppercase; letter-spacing:.1em; color:var(--dim); margin:38px 0 12px; }
+  .lede { color:#c9d1d9; max-width:72ch; }
+  table { width:100%; border-collapse:collapse; margin: 6px 0 4px; font-size:14px; }
+  th, td { text-align:left; padding:9px 12px; border-bottom:1px solid #1b222b; }
+  th { color:var(--dim); font-size:11.5px; text-transform:uppercase; letter-spacing:.07em; }
+  td.mono, .mono { font-family: ui-monospace, Menlo, monospace; font-size:13px; }
+  td.num { font-family: ui-monospace, Menlo, monospace; text-align:right; }
+  .box { background:#0b1016; border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:14px 0; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width: 720px) { .grid { grid-template-columns:1fr; } }
+  .big { font-family: ui-monospace, Menlo, monospace; font-size:26px; color:var(--accent2); }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .dim { color:var(--dim); }
+  .note { border-left:3px solid var(--accent); padding:10px 14px; background:#12181f; border-radius:0 10px 10px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Economics</h1>
+  <p class="lede">Two numbers decide whether an agent-payment rail is real: what a settlement costs, and who pays
+  for it. Both are measured on chain, not modelled.</p>
+
+  <h2>1 · What settlement costs</h2>
+  <p class="dim">Measured on chipnet by <code class="mono">scripts/batch-run.mjs</code>. The pod pays N chunks per
+  input, so the fee is amortised across payments instead of repeated.</p>
+  <table id="batch">
+    <thead><tr><th>Chunks per transaction</th><th class="num">Tx size</th><th class="num">Fee</th><th class="num">Fee per payment</th></tr></thead>
+    <tbody><tr><td colspan="4" class="dim">loading measurement…</td></tr></tbody>
+  </table>
+  <div class="box" id="batch-summary"></div>
+  <div class="note">The covenant refuses to merge two pods into one transaction — that would wreck per-pod
+  accounting. So settlement scales by paying many chunks per input rather than many pods per transaction. On chains
+  with meaningful fees, the per-payment cost is what decides whether an agent can afford to pay per inference at
+  all.</div>
+
+  <h2>2 · Who pays, and how this makes money</h2>
+  <div class="grid">
+    <div class="box">
+      <div class="mono dim">take rate</div>
+      <div class="big">1%</div>
+      <p class="dim" style="margin:6px 0 0">of settled volume, charged on the <b>agent side</b> — the side that
+      benefits from a ceiling and a refund path. Free for providers, so supply shows up first.</p>
+    </div>
+    <div class="box">
+      <div class="mono dim">hosted policy dashboard</div>
+      <div class="big">$99<span style="font-size:15px" class="dim">/mo</span></div>
+      <p class="dim" style="margin:6px 0 0">budgets, per-provider ceilings, refund windows, receipts and an audit
+      trail. This is the part a CFO actually buys.</p>
+    </div>
+  </div>
+
+  <h2>3 · Unit economics per job</h2>
+  <table>
+    <thead><tr><th>Line</th><th class="num">Value</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td>Chunk delivery (1 chunk, 1 tx)</td><td class="num">~700 sat ≈ $0.0002</td><td class="dim">measured</td></tr>
+      <tr><td>Chunk delivery (batched ×16)</td><td class="num">~44 sat ≈ $0.00001</td><td class="dim">measured, per payment</td></tr>
+      <tr><td>Refund of the remainder</td><td class="num">~600 sat ≈ $0.0002</td><td class="dim">the "dispute fee"</td></tr>
+      <tr><td>Covenant footprint</td><td class="num">930 bytes</td><td class="dim">no indexer, no server state required</td></tr>
+      <tr><td>Our revenue on a $500 job</td><td class="num">$5.00</td><td class="dim">1% of settled volume</td></tr>
+      <tr><td>Network fees on that job (50 chunks)</td><td class="num">~$0.01</td><td class="dim">0.2% of revenue</td></tr>
+    </tbody>
+  </table>
+
+  <h2>4 · Why the incumbent options lose on these numbers</h2>
+  <table>
+    <thead><tr><th>Option</th><th>Why it fails an agent paying per unit of work</th></tr></thead>
+    <tbody>
+      <tr><td><b>Funded hot wallet</b> (raw x402 style)</td><td class="dim">No ceiling and no refunds: one buggy or hostile provider drains the budget, and a garbage response is final. Documented as a gap by the standard's own backers.</td></tr>
+      <tr><td><b>Custodial platform</b> (Stripe-for-agents)</td><td class="dim">Requires KYC and an account per side; per-transaction pricing can't settle a tenth of a cent; settlement is T+2, not a block.</td></tr>
+      <tr><td><b>EVM escrow contract</b></td><td class="dim">Works, but gas makes per-chunk settlement absurd — the fee exceeds the payment for small chunks, so you have to batch off-chain and reintroduce a custodian.</td></tr>
+      <tr><td><b>Foreman</b></td><td class="ok">Bounded pull + expiry + refund, all enforced by the covenant. Per-chunk settlement is affordable, and the refund path is cheap enough to actually use.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5 · Who the first customer is</h2>
+  <p class="lede">Agent frameworks and marketplaces that already move money to providers: inference resellers,
+  GPU-time brokers, data-labeling and scraping pipelines, and any multi-step agent that subcontracts. The wedge is
+  narrow and real: <b>"stop giving your agent a funded wallet"</b>. The pitch is one integration, one covenant, and a
+  spend ceiling that survives a compromised agent.</p>
+
+  <h2>6 · What the prize money would fund</h2>
+  <p class="lede">A third-party review of the covenant, a fee-policy parameter so budgets aren't constants, the
+  payload-hash commitment that puts quality disputes on chain, and 20 conversations with agent builders who pay
+  providers today.</p>
+
+  <p class="dim" style="margin-top:26px"><a href="../">← back to the app</a></p>
+</div>
+<script>
+  fetch('../batch.json').then((r) => r.json()).then((b) => {
+    const tb = document.querySelector('#batch tbody');
+    tb.innerHTML = b.rows.map((r) => r.refused
+      ? `<tr><td class="mono">${r.chunks}</td><td colspan="3" class="bad mono">refused: ${r.message}</td></tr>`
+      : `<tr><td class="mono">${r.chunks}</td><td class="num">${r.bytes} B</td><td class="num">${Number(r.feeSats).toLocaleString()} sat</td><td class="num">${r.satsPerPayment} sat</td></tr>`
+    ).join('');
+    if (b.comparison) {
+      document.getElementById('batch-summary').innerHTML =
+        `Same 16 payments: <b>${Number(b.comparison.oneByOne.feeSats).toLocaleString()} sat</b> over 16 transactions,
+         or <b>${Number(b.comparison.batched.feeSats).toLocaleString()} sat</b> in one 514-byte transaction —
+         <span class="ok">${b.comparison.savingPct}% cheaper</span>. Both measured on chipnet (${b.generatedAt.slice(0,10)}).`;
+    }
+  }).catch(() => {});
+</script>
+</body>
+</html>

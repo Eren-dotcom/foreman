@@ -1,0 +1,217 @@
+{
+  "generatedAt": "2026-11-20T19:08:23.611Z",
+  "network": "chipnet",
+  "explorer": "https://chipnet.imaginary.cash/tx/",
+  "identities": {
+    "client": "bchtest:zq7zalxf3ctg7yca6kt4r6yt78c3q2tnkq9d698dxu",
+    "provider": "bchtest:zryvhfcez33j6azvajhe9ud3qrjm0vju9y45clsfht"
+  },
+  "jobs": {
+    "A": {
+      "pod": {
+        "chunk": "20000",
+        "window": "60000",
+        "validUntil": "340038"
+      },
+      "job": {
+        "jobId": "job_bb47ce0d",
+        "client": "bchtest:zq7zalxf3ctg7yca6kt4r6yt78c3q2tnkq9d698dxu",
+        "provider": "bchtest:zryvhfcez33j6azvajhe9ud3qrjm0vju9y45clsfht",
+        "description": "5 chunks of inference work for an agent wallet"
+      },
+      "receipts": [
+        {
+          "jobHash": "fbd021e6bcd5eb678d47dc8156fc44e085e095603f2292b721f4c3d9cb638893",
+          "index": 0,
+          "payloadHash": "ac08c4a59c0541b8498790481a9dc92c4276a45e085e87e23e7de217134cc1de",
+          "txid": "3ddecdb1d87e41c65bbc738f47ad959886d3f650ed4da1a5d188c65255d03924",
+          "paidSats": "20000",
+          "hash": "9ab369bd26af54787cf4f3850d1c2bf3a96240d535a565e12981eac1ef1c76dc"
+        },
+        {
+          "jobHash": "fbd021e6bcd5eb678d47dc8156fc44e085e095603f2292b721f4c3d9cb638893",
+          "index": 1,
+          "payloadHash": "3fbfb6559601f0cb7607e880a04619b564109d7514d974b38b522709ee001caa",
+          "txid": "4ef725774d8a4d34a1e625762985afe0a10796970b79f85e5512724f0bd7bc9c",
+          "paidSats": "20000",
+          "hash": "48cd0f6fd42b2d9891c1eea6ab9ca2ed83a49f0739f1150373b9249e8e4cfa2a"
+        },
+        {
+          "jobHash": "fbd021e6bcd5eb678d47dc8156fc44e085e095603f2292b721f4c3d9cb638893",
+          "index": 2,
+          "payloadHash": "aadb05459e391a8fdb71ddbfb429d8e7d2f1c6a8514f7b9de19f34ffd44d8ded",
+          "txid": "2d35a7b9cb3207e395621cc7f650dbea39f51aa8aef794f12aa7c1aa45fb2b55",
+          "paidSats": "20000",
+          "hash": "cad0cb30f6be0c02802186b0411d33960b269a4031af74f796bec42fa6781f92"
+        }
+      ],
+      "live": {
+        "address": "bchtest:pwrltlfj30y6kqkkd4c6w7sdp668uh530wyrgxurakla5z482g8zyf628athz",
+        "balance": "0",
+        "utxos": 0,
+        "blockHeight": 340014,
+        "expired": false,
+        "blocksToExpiry": 24
+      }
+    },
+    "B": {
+      "pod": {
+        "chunk": "20000",
+        "window": "60000",
+        "validUntil": "340009"
+      },
+      "job": {
+        "jobId": "job_cfcdaa0e",
+        "client": "bchtest:zq7zalxf3ctg7yca6kt4r6yt78c3q2tnkq9d698dxu",
+        "provider": "bchtest:zryvhfcez33j6azvajhe9ud3qrjm0vju9y45clsfht",
+        "description": "a job whose authority window has closed"
+      },
+      "live": {
+        "address": "bchtest:pwpt53097e3j5ug385r6mvh76z8nureps9zukxkge8hngdgymtnxvt88gj4vr",
+        "balance": "60000",
+        "utxos": 1,
+        "blockHeight": 340014,
+        "expired": true,
+        "blocksToExpiry": 0
+      }
+    }
+  },
+  "steps": [
+    {
+      "n": 1,
+      "at": "2026-11-20T19:07:54.777Z",
+      "kind": "faucet",
+      "title": "Faucet → client (500000 sat of chipnet BCH)",
+      "txid": "b79300640befff664e34289673fee46d6c30b0fe1c1e9ca71e9b2424fbdfcab2",
+      "who": "client"
+    },
+    {
+      "n": 2,
+      "at": "2026-11-20T19:07:55.096Z",
+      "kind": "note",
+      "title": "Faucet skipped for provider ({\"error\":\"Transaction could not be broadcast. Retry submissi)"
+    },
+    {
+      "n": 3,
+      "at": "2026-11-20T19:08:00.022Z",
+      "kind": "job",
+      "title": "Job A opened: job_bb47ce0d — 20,000 sat per chunk, 60,000 sat window, expires at block 340038",
+      "job": "job_bb47ce0d",
+      "address": "bchtest:pwrltlfj30y6kqkkd4c6w7sdp668uh530wyrgxurakla5z482g8zyf628athz",
+      "jobHash": "fbd021e6bcd5eb678d47dc8156fc44e085e095603f2292b721f4c3d9cb638893"
+    },
+    {
+      "n": 4,
+      "at": "2026-11-20T19:08:02.125Z",
+      "kind": "fund",
+      "title": "Client pre-authorises 100,000 sat into the pod",
+      "txid": "0bd9207198baef874210d2ac8e281ca28704445474863ca3ba5f1ca840fb46f0"
+    },
+    {
+      "n": 5,
+      "at": "2026-11-20T19:08:04.473Z",
+      "kind": "deliver",
+      "title": "Provider pulled chunk 1 (20,000 sat) — remainder returned to the pod",
+      "txid": "3ddecdb1d87e41c65bbc738f47ad959886d3f650ed4da1a5d188c65255d03924",
+      "paid": "20000",
+      "receipt": {
+        "jobHash": "fbd021e6bcd5eb678d47dc8156fc44e085e095603f2292b721f4c3d9cb638893",
+        "index": 0,
+        "payloadHash": "ac08c4a59c0541b8498790481a9dc92c4276a45e085e87e23e7de217134cc1de",
+        "txid": "3ddecdb1d87e41c65bbc738f47ad959886d3f650ed4da1a5d188c65255d03924",
+        "paidSats": "20000",
+        "hash": "9ab369bd26af54787cf4f3850d1c2bf3a96240d535a565e12981eac1ef1c76dc"
+      },
+      "index": 0
+    },
+    {
+      "n": 6,
+      "at": "2026-11-20T19:08:08.895Z",
+      "kind": "deliver",
+      "title": "Provider pulled chunk 2 (20,000 sat) — remainder returned to the pod",
+      "txid": "4ef725774d8a4d34a1e625762985afe0a10796970b79f85e5512724f0bd7bc9c",
+      "paid": "20000",
+      "receipt": {
+        "jobHash": "fbd021e6bcd5eb678d47dc8156fc44e085e095603f2292b721f4c3d9cb638893",
+        "index": 1,
+        "payloadHash": "3fbfb6559601f0cb7607e880a04619b564109d7514d974b38b522709ee001caa",
+        "txid": "4ef725774d8a4d34a1e625762985afe0a10796970b79f85e5512724f0bd7bc9c",
+        "paidSats": "20000",
+        "hash": "48cd0f6fd42b2d9891c1eea6ab9ca2ed83a49f0739f1150373b9249e8e4cfa2a"
+      },
+      "index": 1
+    },
+    {
+      "n": 7,
+      "at": "2026-11-20T19:08:13.324Z",
+      "kind": "deliver",
+      "title": "Provider pulled chunk 3 (20,000 sat) — remainder returned to the pod",
+      "txid": "2d35a7b9cb3207e395621cc7f650dbea39f51aa8aef794f12aa7c1aa45fb2b55",
+      "paid": "20000",
+      "receipt": {
+        "jobHash": "fbd021e6bcd5eb678d47dc8156fc44e085e095603f2292b721f4c3d9cb638893",
+        "index": 2,
+        "payloadHash": "aadb05459e391a8fdb71ddbfb429d8e7d2f1c6a8514f7b9de19f34ffd44d8ded",
+        "txid": "2d35a7b9cb3207e395621cc7f650dbea39f51aa8aef794f12aa7c1aa45fb2b55",
+        "paidSats": "20000",
+        "hash": "cad0cb30f6be0c02802186b0411d33960b269a4031af74f796bec42fa6781f92"
+      },
+      "index": 2
+    },
+    {
+      "n": 8,
+      "at": "2026-11-20T19:08:16.355Z",
+      "kind": "refuse",
+      "title": "Malicious provider tries to pull 4 chunks at once — the covenant refuses",
+      "refused": true,
+      "message": "ChunkPod.cash:44 Require statement failed at input 0 in contract ChunkPod.cash at line 44.",
+      "explain": {
+        "line": 44,
+        "rule": "deliver.window",
+        "text": "This pull exceeds the per-transaction window. The blast radius is capped by the covenant."
+      }
+    },
+    {
+      "n": 9,
+      "at": "2026-11-20T19:08:16.936Z",
+      "kind": "refuse",
+      "title": "Client tries to reclaim its money mid-job — the covenant refuses",
+      "refused": false,
+      "message": "VM accepted an early refund — a contract bug"
+    },
+    {
+      "n": 10,
+      "at": "2026-11-20T19:08:18.847Z",
+      "kind": "close",
+      "title": "Both sign a close: provider paid for 1 more chunk, client made whole for the rest",
+      "txid": "2f125f7ee776f478e9cf21257864117176abffe4562666602a04a0c429ee74f0"
+    },
+    {
+      "n": 11,
+      "at": "2026-11-20T19:08:18.851Z",
+      "kind": "job",
+      "title": "Job B opened with a window that closes at block 340009 — authority is time-bounded",
+      "job": "job_cfcdaa0e",
+      "address": "bchtest:pwpt53097e3j5ug385r6mvh76z8nureps9zukxkge8hngdgymtnxvt88gj4vr"
+    },
+    {
+      "n": 12,
+      "at": "2026-11-20T19:08:20.962Z",
+      "kind": "fund",
+      "title": "Client funds 60,000 sat into a pod that is already past its expiry",
+      "txid": "c1056061871c2f968bdba436987140cf04517621bd84d5a7712df779ea05015d"
+    },
+    {
+      "n": 13,
+      "at": "2026-11-20T19:08:22.800Z",
+      "kind": "note",
+      "title": "Refund pending: Transaction is not yet final (nLockTime not satisfied): the transaction was rejected by network rules."
+    }
+  ],
+  "totals": {
+    "chunks": 3,
+    "paidSats": "60000",
+    "refusals": 2,
+    "txs": 7
+  }
+}

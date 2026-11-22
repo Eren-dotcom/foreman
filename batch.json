@@ -1,0 +1,77 @@
+{
+  "generatedAt": "2026-11-20T19:04:21.588Z",
+  "network": "chipnet",
+  "explorer": "https://chipnet.imaginary.cash/tx/",
+  "pod": {
+    "address": "bchtest:pwzjuny4hcw76myavwgchazy0vs97q6tdz9jcjmvm4kyyt88s7au5d9vme2n8",
+    "chunk": "5000",
+    "window": "200000",
+    "validUntil": "340509"
+  },
+  "client": "bchtest:zztqnjhla40wdqtmvpwjrvgczlpvlcf2dg44ga2gg5",
+  "provider": "bchtest:zrufhg705t4y8mhrsu42c94c3hmr4djycc874kfjk5",
+  "mode": "batched",
+  "rows": [
+    {
+      "chunks": 1,
+      "bytes": 514,
+      "feeSats": "700",
+      "satsPerPayment": "700.0",
+      "txid": "5bc49b2d6edcc189b75bc3aac2f7bc1bca776e571079029b0c0487bf4401e0e9",
+      "at": "2026-11-20T19:04:10.927Z"
+    },
+    {
+      "chunks": 2,
+      "bytes": 514,
+      "feeSats": "700",
+      "satsPerPayment": "350.0",
+      "txid": "a3115737ffab98511ddcd91210112e17f62b3711af4ba6fc3f0427ed0683d8b7",
+      "at": "2026-11-20T19:04:13.219Z"
+    },
+    {
+      "chunks": 4,
+      "bytes": 514,
+      "feeSats": "700",
+      "satsPerPayment": "175.0",
+      "txid": "5b8fb6624de0eb8aabc16af7c9571a8a3e2c1086caf26baa3bb325545000c49e",
+      "at": "2026-11-20T19:04:15.511Z"
+    },
+    {
+      "chunks": 8,
+      "bytes": 514,
+      "feeSats": "700",
+      "satsPerPayment": "87.5",
+      "txid": "cd9a2e5623fdd126ddff08117b1f2abc81b98b65dc0ed9404200f01778d2522e",
+      "at": "2026-11-20T19:04:17.801Z"
+    },
+    {
+      "chunks": 16,
+      "bytes": 514,
+      "feeSats": "700",
+      "satsPerPayment": "43.8",
+      "txid": "99747828ac631e9de1ced4169f584e1a807e7cef1bf98f02ec600eb3fecb8533",
+      "at": "2026-11-20T19:04:20.087Z"
+    }
+  ],
+  "comparison": {
+    "oneByOne": {
+      "txs": 16,
+      "bytes": 8224,
+      "feeSats": "11200"
+    },
+    "batched": {
+      "txs": 1,
+      "bytes": 514,
+      "feeSats": "700"
+    },
+    "savingPct": "93.8"
+  },
+  "live": {
+    "address": "bchtest:pwzjuny4hcw76myavwgchazy0vs97q6tdz9jcjmvm4kyyt88s7au5d9vme2n8",
+    "balance": "141500",
+    "utxos": 1,
+    "blockHeight": 340010,
+    "expired": false,
+    "blocksToExpiry": 499
+  }
+}

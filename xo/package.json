@@ -1,0 +1,1 @@
+{"name":"foreman-xo","version":"0.1.0","private":true,"type":"module","dependencies":{"@xo-cash/engine":"^0.0.1","@xo-cash/state":"^0.0.6","@xo-cash/templates":"^0.0.12","@xo-cash/utils":"^0.0.12"}}

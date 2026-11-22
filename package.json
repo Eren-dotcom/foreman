@@ -1,0 +1,31 @@
+{
+  "name": "foreman",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Foreman — bounded, refundable pay for AI work, enforced by a Bitcoin Cash covenant. BCH BLAZE 2026.",
+  "scripts": {
+    "compile": "node compile.mjs",
+    "test": "node compile.mjs && node tests/ChunkPod.test.mjs && node --test tests/WalletGuard.test.mjs tests/Guard.test.mjs tests/Reconcile.test.mjs tests/ReconcileWalk.test.mjs tests/UiWiring.test.mjs",
+    "demo": "node scripts/demo.mjs",
+    "start": "node server.mjs",
+    "test:wallet": "node --test tests/WalletGuard.test.mjs",
+    "wallet:e2e": "node tools/wallet-e2e.mjs",
+    "test:guard": "node --test tests/Guard.test.mjs",
+    "test:reconcile": "node --test tests/Reconcile.test.mjs",
+    "reconcile": "node scripts/reconcile.mjs",
+    "verify:evidence": "node scripts/verify-evidence.mjs --strict"
+  },
+  "dependencies": {
+    "@bitauth/libauth": "^3.0.0",
+    "@wizardconnect/core": "^0.2.11",
+    "@wizardconnect/dapp": "^0.2.8",
+    "cashscript": "^0.14.0",
+    "express": "^5.3.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@wizardconnect/wallet": "^0.2.5",
+    "cashc": "^0.14.0"
+  }
+}

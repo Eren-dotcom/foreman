@@ -1,0 +1,97 @@
+pragma cashscript ^0.14.0;
+
+// Fee budgets per spend path. Deterministic so the covenant can check the
+// remainder to the satoshi; a production build would use a fee policy.
+int constant FEE = 700;
+int constant REFUND_FEE = 600;
+int constant CLOSE_FEE = 800;
+
+/*
+ * ChunkPod — a pre-authorized, bounded payment channel for AI-driven work.
+ *
+ * The client funds one coin ("pod"). A provider (an AI agent, a GPU node, an
+ * inference worker) is paid per delivered chunk, but can never take more than
+ * `window` sats in a single transaction. Everything not taken returns to the
+ * same contract address, so the pod carries its own state in the coin.
+ * After `validUntil` the client takes the remainder back — authority expires,
+ * like a pre-authorized card, instead of sitting in a hot wallet forever.
+ *
+ * Outputs for deliver():
+ *   [0] provider P2PKH  = paid chunk value
+ *   [1] this pod         = held - paid - FEE
+ */
+contract ChunkPod(
+    bytes20 clientPkh,      // client's HASH160 — reclaims the remainder
+    bytes20 providerPkh,    // provider's HASH160 — paid per chunk
+    int chunk,              // sats authorised per delivered chunk (== ceil of work unit)
+    int window,             // max sats payable in ANY single tx (blast-radius cap)
+    int validUntil          // block height after which only the client can spend
+) {
+    // Provider pulls payment for one or more delivered chunks.
+    function deliver(pubkey providerPk, sig providerSig) {
+        // Only the authorised provider can pull.
+        require(hash160(providerPk) == providerPkh);
+        require(checkSig(providerSig, providerPk));
+
+        // One pod input only: prevents merging/overdraw across pods.
+        require(tx.inputs.length == 1);
+
+        int held = tx.inputs[this.activeInputIndex].value;
+
+        // Pay at least one chunk, at most `window` in this transaction.
+        int paid = tx.outputs[0].value;
+        require(paid >= chunk);
+        require(paid <= window);
+        require(paid % chunk == 0);           // whole chunks only
+        require(held >= paid + FEE);
+
+        bytes25 providerLockingBytecode = new LockingBytecodeP2PKH(providerPkh);
+        require(tx.outputs[0].lockingBytecode == providerLockingBytecode);
+
+        // Everything else stays in the pod: same locking bytecode, exact amount.
+        require(tx.outputs.length == 2);
+        require(tx.outputs[1].lockingBytecode == tx.inputs[this.activeInputIndex].lockingBytecode);
+        require(tx.outputs[1].value == held - paid - FEE);
+    }
+
+    // After expiry the client recovers everything that is left.
+    // Authority expires, the money does not.
+    function refund(pubkey clientPk, sig clientSig) {
+        require(hash160(clientPk) == clientPkh);
+        require(checkSig(clientSig, clientPk));
+
+        // Absolute (height-based) expiry, enforced by the network.
+        require(tx.time >= validUntil);
+        require(tx.inputs.length == 1);
+
+        bytes25 clientLockingBytecode = new LockingBytecodeP2PKH(clientPkh);
+        require(tx.outputs.length == 1);
+        require(tx.outputs[0].lockingBytecode == clientLockingBytecode);
+        require(tx.outputs[0].value == tx.inputs[this.activeInputIndex].value - REFUND_FEE);
+    }
+
+    // Mutual close: both parties agree, provider paid now, client gets the rest.
+    function close(
+        pubkey clientPk, sig clientSig,
+        pubkey providerPk, sig providerSig
+    ) {
+        require(hash160(clientPk) == clientPkh);
+        require(hash160(providerPk) == providerPkh);
+        require(checkSig(clientSig, clientPk));
+        require(checkSig(providerSig, providerPk));
+
+        require(tx.inputs.length == 1);
+        int held = tx.inputs[this.activeInputIndex].value;
+        int paid = tx.outputs[0].value;
+
+        require(paid % chunk == 0);
+        require(held >= paid + CLOSE_FEE);
+
+        bytes25 providerLockingBytecode = new LockingBytecodeP2PKH(providerPkh);
+        bytes25 clientLockingBytecode = new LockingBytecodeP2PKH(clientPkh);
+        require(tx.outputs.length == 2);
+        require(tx.outputs[0].lockingBytecode == providerLockingBytecode);
+        require(tx.outputs[1].lockingBytecode == clientLockingBytecode);
+        require(tx.outputs[1].value == held - CLOSE_FEE - tx.outputs[0].value);
+    }
+}

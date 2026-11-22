@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Foreman — the 60-second pitch</title>
+<style>
+  :root { --ink:#0d1117; --fg:#e6edf3; --dim:#8b949e; --accent:#f7931a; --accent2:#ffb454; --line:#242c37; --ok:#3fb950; --bad:#f85149; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background: radial-gradient(1100px 600px at 15% -10%, #1b2430, var(--ink) 60%); color:var(--fg);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow:hidden; }
+  .deck { height:100%; display:flex; align-items:center; justify-content:center; padding: 28px; }
+  .slide { width: min(1000px, 96vw); height: min(660px, 88vh); background: linear-gradient(180deg,#12181f,#0e1318);
+    border:1px solid var(--line); border-radius:18px; padding: 42px 46px; display:none; flex-direction:column; }
+  .slide.on { display:flex; }
+  h1 { font-size: clamp(26px, 3.4vw, 40px); line-height:1.1; margin: 0 0 14px; letter-spacing:-.02em; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing:.12em; color:var(--dim); margin:0 0 18px; }
+  p, li { color:#c9d1d9; font-size: clamp(15px, 1.6vw, 18px); }
+  b { color: var(--fg); }
+  .accent { color: var(--accent); }
+  ul { margin: 0; padding-left: 22px; }
+  li { margin: 9px 0; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+  .box { background:#0b1016; border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13.5px; }
+  .big { font-family: ui-monospace, Menlo, monospace; font-size: clamp(24px,3vw,34px); color:var(--accent2); }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  pre { background:#070b10; border:1px solid var(--line); border-radius:10px; padding:14px; overflow:auto;
+        font-family: ui-monospace, Menlo, monospace; font-size:13px; color:#9fb1c1; margin:0; }
+  .foot { margin-top:auto; padding-top:16px; color:var(--dim); font-size:12.5px; display:flex; justify-content:space-between; }
+  .nav { position:fixed; bottom:18px; right:22px; display:flex; gap:8px; }
+  .nav button { font:inherit; background:transparent; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:8px 14px; cursor:pointer; }
+  .nav button:hover { border-color: var(--accent); }
+  .tag { display:inline-block; font-size:11px; text-transform:uppercase; letter-spacing:.08em; padding:2px 8px; border-radius:99px;
+         background:#12301c; color:var(--ok); border:1px solid #1d4d2c; }
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <section class="slide on">
+    <h2>BCH BLAZE 2026 · Foreman</h2>
+    <h1><span class="accent">Foreman</span><br/>pre-authorised, refundable pay for AI work</h1>
+    <p>An agent locks a budget on Bitcoin Cash. The provider can only pull <b>whole chunks</b> as it delivers — never
+       more than the window in one transaction. Whatever isn't delivered is refunded by the covenant when the
+       authority expires.</p>
+    <p class="mono" style="color:var(--accent2)">930 bytes of CashScript · 3 spend paths · 16 VM tests · real transactions</p>
+    <div class="foot"><span>1 / 8</span><span>use ← → to move</span></div>
+  </section>
+
+  <section class="slide">
+    <h2>The problem</h2>
+    <h1>Agents already pay per unit of work.<br/>There is no way to do it safely.</h1>
+    <div class="grid2">
+      <div class="box"><p style="margin:0"><b>Hot wallet</b><br/>A funded key an agent spends from. One buggy or malicious provider and the budget is gone.</p></div>
+      <div class="box"><p style="margin:0"><b>Custodian</b><br/>A platform holds the money. KYC, account, chargeback windows — and it can't settle a tenth of a cent.</p></div>
+    </div>
+    <p style="margin-top:22px"><b>x402</b> (HTTP 402 for agents, a Linux Foundation project with Visa, Mastercard, Stripe, Google, AWS)
+       has three documented holes: <span class="bad">no refunds or disputes</span>, no per-provider spend ceiling, and no BCH settlement.
+       Coinbase's own head of AI product says escrow and refunds are the missing piece.</p>
+    <div class="foot"><span>2 / 8</span></div>
+  </section>
+
+  <section class="slide">
+    <h2>The primitive</h2>
+    <h1>One covenant per job.</h1>
+    <pre>agent ──funds 100,000 sat──► [ pod ]
+                               │
+  provider delivers ───────────┤ deliver()  → pays a whole chunk, rest returns to the pod
+  provider over-reaches ───────┤ deliver()  → ✗ refused by the VM (window)
+  payment redirected ──────────┤ deliver()  → ✗ refused (payee pinned)
+  client panics mid-job ───────┤ refund()   → ✗ refused until expiry
+  job stops, window closes ────┘ refund()   → everything left goes back to the agent</pre>
+    <p class="mono" style="margin-top:18px;color:var(--dim)">contract(pod) = ChunkPod(clientPkh, providerPkh, chunk, window, validUntil)</p>
+    <div class="foot"><span>3 / 8</span></div>
+  </section>
+
+  <section class="slide">
+    <h2>What the VM enforces</h2>
+    <h1>Not policy. Code.</h1>
+    <div class="grid2">
+      <div class="box">
+        <p class="mono" style="margin:0 0 8px;color:var(--accent2)">the provider cannot:</p>
+        <ul class="mono" style="font-size:13.5px">
+          <li>exceed the window in one tx</li>
+          <li>take a partial chunk</li>
+          <li>redirect its own payment</li>
+          <li>skim via a third output</li>
+          <li>short-change the remainder</li>
+          <li>merge two pods</li>
+        </ul>
+      </div>
+      <div class="box">
+        <p class="mono" style="margin:0 0 8px;color:var(--accent2)">the client cannot:</p>
+        <ul class="mono" style="font-size:13.5px">
+          <li>reclaim before expiry</li>
+          <li>refund to anyone else</li>
+          <li>skip the provider's final chunk in a close</li>
+          <li>leave the pod short by a satoshi</li>
+        </ul>
+      </div>
+    </div>
+    <p style="margin-top:20px"><span class="tag">16 covenant tests</span> &nbsp; every refusal is pinned by a test that runs the <b>real BCH VM</b>, with the exact failing line named.</p>
+    <div class="foot"><span>4 / 8</span></div>
+  </section>
+
+  <section class="slide">
+    <h2>Before the money moves</h2>
+    <h1>A refusal that costs nothing.</h1>
+    <pre>intent ──► guard (9 rules, live chain state) ──► <b>deny: deliver.window</b>
+                                                    │
+                                                    └─ 0 sat spent · 0 tx built · no relay contacted
+
+the same intent id again ──► the same preceipt, byte for byte  (duplicate: true)</pre>
+    <p style="margin-top:16px">The covenant is the authority. The guard is the courtesy that keeps a bad job
+    from ever reaching it — and every preceipt is a hashed record of a decision made <b>before</b> a
+    transaction existed, so an agent's reasoning is auditable even when it decided not to act.</p>
+    <p style="margin-top:14px"><span class="tag">17 guard tests</span> &nbsp; pass / deny / needs-review, with
+    unknown state degrading to <b>skipped</b> — never a silent pass.</p>
+    <div class="foot"><span>5 / 8</span></div>
+  </section>
+
+  <section class="slide">
+    <h2>After the money moves</h2>
+    <h1>The books answer to the chain.</h1>
+    <pre>funded = paid + fees + refunded + elsewhere + held        ← must close to the satoshi
+
+3/3 pods reconcile       1/3 sets of books agreed
+                         └─ our own close() paid a final chunk the ledger never booked</pre>
+    <p style="margin-top:16px">Reconciliation ignores Foreman's ledger and rebuilds settlement by walking real
+    transactions. It found a bug in this app within its first hour — on a chain that was correct the whole time.
+    The covenant never paid the wrong amount; the paperwork did.</p>
+    <p style="margin-top:14px"><span class="tag">49 offline assertions</span> &nbsp; covenant, wallet guardrail,
+    guard, reconciliation, and the transaction walk against a fake indexer.</p>
+    <div class="foot"><span>6 / 8</span></div>
+  </section>
+
+  <section class="slide">
+    <h2>It runs today</h2>
+    <h1>Real Chipnet transactions, one link.</h1>
+    <ul class="mono" style="font-size:14px">
+      <li>fund 100,000 sat into a pod <span class="ok">→ broadcast</span></li>
+      <li>provider pulls 3 chunks <span class="ok">→ 3 broadcasts</span></li>
+      <li>provider tries a 4-chunk pull <span class="bad">→ refused: deliver.window (line 44)</span></li>
+      <li>client tries an early reclaim <span class="bad">→ refused: refund.not-expired (line 64)</span></li>
+      <li>both sign a close <span class="ok">→ broadcast</span></li>
+      <li>expired pod refunded <span class="ok">→ broadcast</span></li>
+    </ul>
+    <p style="margin-top:18px">The demo page runs the whole job <b>live, on click</b>, with an explorer link on every step — and it also replays a recorded run so a judge can see evidence in ten seconds without a wallet.</p>
+    <div class="foot"><span>7 / 8</span></div>
+  </section>
+
+  <section class="slide">
+    <h2>Why BCH and not somewhere else</h2>
+    <h1>One fee, many payments.</h1>
+    <div class="grid2">
+      <div class="box"><p class="mono" style="margin:0;color:var(--dim)">16 payments, one by one</p><p class="big" style="margin:6px 0 0">11,200 sat</p><p class="mono" style="color:var(--dim);margin:4px 0 0">16 transactions</p></div>
+      <div class="box"><p class="mono" style="margin:0;color:var(--dim)">16 payments, batched</p><p class="big" style="margin:6px 0 0">700 sat</p><p class="mono" style="color:var(--dim);margin:4px 0 0">1 transaction, 514 bytes</p></div>
+    </div>
+    <p style="margin-top:20px"><b>93.8% cheaper</b> — measured, on chain, not modelled. And the refund path costs about
+       <b>$0.0002</b>: on BCH the refund <i>is</i> the dispute system, because exercising it is free enough that
+       neither side has a reason not to.</p>
+    <div class="foot"><span>8 / 8</span></div>
+  </section>
+
+  <section class="slide">
+    <h2>Business</h2>
+    <h1>1% of settled volume, paid by the agent side.</h1>
+    <div class="grid2">
+      <div class="box">
+        <p class="mono" style="margin:0 0 6px;color:var(--accent2)">who pays</p>
+        <p style="margin:0">Agent frameworks and marketplaces that already pay for inference, GPU time and data — plus a $99/mo hosted spend-policy and audit dashboard (budgets, per-provider ceilings, refund windows).</p>
+      </div>
+      <div class="box">
+        <p class="mono" style="margin:0 0 6px;color:var(--accent2)">why it wins</p>
+        <p style="margin:0">A custodian can't settle sub-cent and needs KYC. A raw x402 wallet can be drained and can't refund. Foreman is the only rail where both sides are protected by the same 930 bytes.</p>
+      </div>
+    </div>
+    <p style="margin-top:20px">Honest limits: unaudited; demo keys are ours; the covenant enforces money, not truth about whether the work was any good — a production version adds a delivered-artifact hash per chunk.</p>
+    <div class="foot"><span>8 / 8</span><span>github · foreman</span></div>
+  </section>
+
+</div>
+<div class="nav">
+  <button id="prev">←</button><button id="next">→</button>
+</div>
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  let i = 0;
+  const show = (n) => { i = Math.max(0, Math.min(slides.length - 1, n)); slides.forEach((s, k) => s.classList.toggle('on', k === i)); };
+  document.getElementById('next').onclick = () => show(i + 1);
+  document.getElementById('prev').onclick = () => show(i - 1);
+  addEventListener('keydown', (e) => {
+    if (['ArrowRight', 'PageDown', ' '].includes(e.key)) show(i + 1);
+    if (['ArrowLeft', 'PageUp'].includes(e.key)) show(i - 1);
+  });
+</script>
+</body>
+</html>

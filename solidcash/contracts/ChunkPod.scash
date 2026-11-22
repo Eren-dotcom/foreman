@@ -1,0 +1,43 @@
+pragma solidcash ^0.51.1;
+
+// ChunkPod — the SolidCash port of the Foreman covenant.
+// Same rules, same fee budgets, same three spend paths as ChunkPod.cash.
+contract ChunkPod(bytes20 clientPkh, bytes20 providerPkh, int chunkSize, int windowSize, int validUntil) {
+    int constant FEE = 700;
+    int constant REFUND_FEE = 600;
+
+    // The provider pulls payment for whole chunks.
+    function deliver(pubkey providerPk, sig providerSig) {
+        require(hash160(providerPk) == providerPkh);
+        require(checkSig(providerSig, providerPk));
+        require(tx.inputs.length == 1);
+
+        int held = tx.inputs[this.activeInputIndex].value;
+        int paid = tx.outputs[0].value;
+
+        require(paid >= chunkSize);
+        require(paid <= windowSize);
+        require(paid % chunkSize == 0);
+        require(held >= paid + FEE);
+
+        bytes25 providerLockingBytecode = new LockingBytecodeP2PKH(providerPkh);
+        require(tx.outputs[0].lockingBytecode == providerLockingBytecode);
+
+        require(tx.outputs.length == 2);
+        require(tx.outputs[1].lockingBytecode == tx.inputs[this.activeInputIndex].lockingBytecode);
+        require(tx.outputs[1].value == held - paid - FEE);
+    }
+
+    // After expiry the client takes back whatever is left.
+    function refund(pubkey clientPk, sig clientSig) {
+        require(hash160(clientPk) == clientPkh);
+        require(checkSig(clientSig, clientPk));
+        require(tx.time >= validUntil);
+        require(tx.inputs.length == 1);
+
+        bytes25 clientLockingBytecode = new LockingBytecodeP2PKH(clientPkh);
+        require(tx.outputs.length == 1);
+        require(tx.outputs[0].lockingBytecode == clientLockingBytecode);
+        require(tx.outputs[0].value == tx.inputs[this.activeInputIndex].value - REFUND_FEE);
+    }
+}

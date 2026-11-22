@@ -1,0 +1,37 @@
+{
+  "inputs": {
+    "jobs": 2000,
+    "chunks": 6,
+    "chunkSats": 20000,
+    "feeRate": 1,
+    "incidents": 4,
+    "rogueBudgetSats": 2000000,
+    "bchUsd": 600
+  },
+  "paidSats": 240000000,
+  "rows": [
+    {
+      "name": "A · plain tx per chunk",
+      "txs": 12000,
+      "fee": 2712000,
+      "exposure": "unbounded",
+      "exposureSats": 8000000
+    },
+    {
+      "name": "B · pod, one deliver() per chunk",
+      "txs": 12000,
+      "fee": 8400000,
+      "exposure": "bounded",
+      "exposureSats": 0
+    },
+    {
+      "name": "C · pod, batched pull per job",
+      "txs": 2000,
+      "fee": 1400000,
+      "exposure": "bounded",
+      "exposureSats": 0
+    }
+  ],
+  "savedVsA": 1312000,
+  "generatedAt": "2026-11-21T05:47:50.181Z"
+}

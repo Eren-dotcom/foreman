@@ -1,0 +1,55 @@
+{
+  "at": "2026-11-20T19:16:18.032Z",
+  "passed": 12,
+  "total": 12,
+  "results": [
+    [
+      "PASS",
+      "1  deliver 1 chunk → provider paid, remainder returns to the pod"
+    ],
+    [
+      "PASS",
+      "2  deliver 2 chunks in one transaction (inside the window)"
+    ],
+    [
+      "PASS",
+      "3  CHEAT over-window pull (80000 > window 60000) rejected"
+    ],
+    [
+      "PASS",
+      "4  CHEAT partial chunk (30000) rejected"
+    ],
+    [
+      "PASS",
+      "5  CHEAT unknown key signs as provider rejected"
+    ],
+    [
+      "PASS",
+      "6  CHEAT provider redirects its payment to a stranger rejected"
+    ],
+    [
+      "PASS",
+      "7  CHEAT short-changed remainder rejected"
+    ],
+    [
+      "PASS",
+      "8  CHEAT overdraw (pull more than the pod holds) rejected"
+    ],
+    [
+      "PASS",
+      "9  CHEAT refund before expiry rejected"
+    ],
+    [
+      "PASS",
+      "10 refund at expiry: the client recovers the remainder"
+    ],
+    [
+      "PASS",
+      "11 CHEAT provider cannot refund the pod to itself"
+    ],
+    [
+      "PASS",
+      "12 CHEAT refund to the wrong destination rejected"
+    ]
+  ]
+}

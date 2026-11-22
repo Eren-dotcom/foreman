@@ -1,0 +1,19 @@
+{
+  "name": "solidcash",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "node tests/ChunkPod.scash.test.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "description": "Foreman's covenant ported to SolidCash \u2014 12 tests on the SolidCash VM",
+  "dependencies": {
+    "@noble/curves": "^1.9.0",
+    "@noble/hashes": "^1.8.0",
+    "@solidcash/solidc": "^0.51.1",
+    "@solidcash/solidcash": "^0.51.1",
+    "@solidcash/solidhat": "^0.51.1"
+  }
+}

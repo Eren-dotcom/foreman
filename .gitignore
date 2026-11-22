@@ -1,0 +1,6 @@
+node_modules/
+.secrets/
+*.log
+solidcash/node_modules
+xo/node_modules
+xo/*.sqlite

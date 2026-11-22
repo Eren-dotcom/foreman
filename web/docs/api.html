@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Foreman — API</title>
+<style>
+  :root { --ink:#0d1117; --fg:#e6edf3; --dim:#8b949e; --accent:#f7931a; --accent2:#ffb454; --line:#242c37; --ok:#3fb950; --bad:#f85149; }
+  * { box-sizing:border-box; }
+  body { margin:0; background: radial-gradient(1000px 500px at 20% -10%, #1b2430, var(--ink) 60%); color:var(--fg);
+    font:15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 40px 20px 80px; }
+  a { color: var(--accent2); }
+  h1 { font-size: 32px; margin:0 0 8px; letter-spacing:-.02em; }
+  h2 { font-size: 13px; text-transform:uppercase; letter-spacing:.1em; color:var(--dim); margin:36px 0 12px; }
+  .lede { color:#c9d1d9; max-width:70ch; }
+  pre { background:#070b10; border:1px solid var(--line); border-radius:10px; padding:14px; overflow:auto;
+        font-family: ui-monospace, Menlo, monospace; font-size:13px; color:#9fb1c1; }
+  code { font-family: ui-monospace, Menlo, monospace; font-size:13px; background:#0b1016; border:1px solid var(--line); border-radius:5px; padding:1px 6px; }
+  .row { display:grid; grid-template-columns: 90px 1fr; gap:12px; align-items:start; padding:12px 0; border-bottom:1px solid #1b222b; }
+  .m { font-family: ui-monospace, Menlo, monospace; font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
+  .get { color:#79c0ff; } .post { color:var(--ok); } .gett { color:var(--dim); }
+  .path { font-family: ui-monospace, Menlo, monospace; font-size:14px; }
+  .desc { color:var(--dim); font-size:13.5px; }
+  .note { border-left:3px solid var(--accent); padding:10px 14px; background:#12181f; border-radius:0 10px 10px 0; color:#c9d1d9; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Foreman API</h1>
+  <p class="lede">The primitives an agent framework needs: open a job, pre-authorise a budget, pull a chunk, and
+  verify a payment from chain. Every mutating call broadcasts a <b>real Chipnet transaction</b> when one is valid;
+  every invalid call is <b>evaluated against the BCH VM and refused</b> with the covenant rule that stopped it.</p>
+
+  <div class="note" style="margin-top:20px">
+    Same code path in three places: the CLI (<code>scripts/*.mjs</code>), this HTTP API, and the browser demo.
+    The covenant is the source of truth — this server only builds transactions; it cannot make an invalid one valid.
+  </div>
+
+  <h2>Endpoints</h2>
+  <div class="row"><div class="m post">POST</div><div><div class="path">/api/pods</div><div class="desc">Open a pod. Body: <code>{ chunk, window, blocks }</code>. Returns the pod address and its live chain state.</div></div></div>
+  <div class="row"><div class="m post">POST</div><div><div class="path">/api/pods/:id/fund</div><div class="desc">Client pre-authorises budget into the covenant. Body: <code>{ satoshis }</code>. Broadcasts.</div></div></div>
+  <div class="row"><div class="m post">POST</div><div><div class="path">/api/pods/:id/deliver</div><div class="desc">Provider pulls <code>chunks</code> whole chunks. Body: <code>{ chunks, payload }</code>. Broadcasts, returns a signed receipt (jobHash + payloadHash + txid).</div></div></div>
+  <div class="row"><div class="m post">POST</div><div><div class="path">/api/pods/:id/steal</div><div class="desc">Demonstration: attempt an over-window pull. Body: <code>{ chunks }</code>. Never broadcast — evaluated in the VM, returns <code>{ refused, explain: { rule, line, text } }</code>.</div></div></div>
+  <div class="row"><div class="m post">POST</div><div><div class="path">/api/pods/:id/early-refund</div><div class="desc">Attempt to reclaim before expiry. Refused by <code>refund.not-expired</code>.</div></div></div>
+  <div class="row"><div class="m post">POST</div><div><div class="path">/api/pods/:id/close</div><div class="desc">Mutual close. Body: <code>{ chunks }</code>. Broadcasts.</div></div></div>
+  <div class="row"><div class="m post">POST</div><div><div class="path">/api/pods/:id/refund</div><div class="desc">Reclaim after expiry. Broadcasts only when the tip has passed the expiry block.</div></div></div>
+  <div class="row"><div class="m get">GET</div><div><div class="path">/api/verify/:txid</div><div class="desc">Read a payment back off the chain, decode the outputs, and confirm the provider was paid the expected amount.</div></div></div>
+  <div class="row"><div class="m gett">GET</div><div><div class="path">/api/evidence</div><div class="desc">The recorded run: every step, every txid, every refusal — the same JSON the page renders.</div></div></div>
+  <div class="row"><div class="m gett">GET</div><div><div class="path">/api/health</div><div class="desc">Network and demo identities.</div></div></div>
+
+  <h2>Refuse before spending</h2>
+  <p class="desc">A receipt is written after money moves. A <b>preceipt</b> is written after a decision and
+  before anything is built. Ask the guard first and a bad job costs nothing — no transaction, no fee, no relay.</p>
+  <div class="row"><div class="m post">POST</div><div><div class="path">/api/pods/:id/intent</div><div class="desc">
+    Ask whether an intent would be allowed. Body: <code>{ action, amount, payTo?, id? }</code>.
+    Always <code>200</code> — a denial is an answer, not an error. Returns
+    <code>{ verdict: "pass"|"deny"|"needs-review", code, reason, effect, rules[], hash }</code>.
+    Ask again with the same <code>id</code> and you get the original preceipt back with
+    <code>duplicate: true</code>, never a second decision. Actions: <code>deliver</code>, <code>close</code>,
+    <code>refund</code>, <code>fund</code>.</div></div></div>
+  <div class="row"><div class="m gett">GET</div><div><div class="path">/api/preceipts</div><div class="desc">
+    Every preceipt this session, newest first, plus the intent ids already executed. The agent's own decision log.</div></div></div>
+
+  <h2>Reconciliation</h2>
+  <p class="desc">The app keeps a ledger. These ignore it and rebuild settlement from the chain's real
+  transaction history, then check one identity:
+  <code>funded = paid + fees + refunded + elsewhere + held</code>. If it does not close to the satoshi the
+  reconstruction is wrong and the response says so — it never prints a plausible gap.</p>
+  <div class="row"><div class="m gett">GET</div><div><div class="path">/api/reconcile</div><div class="desc">
+    Every pod this session, rebuilt from chain. Totals include <code>balanceToTheSatoshi</code>,
+    <code>booksAgree</code> and <code>unbookedPayouts</code>. Read-only.</div></div></div>
+  <div class="row"><div class="m gett">GET</div><div><div class="path">/api/pods/:id/reconcile</div><div class="desc">
+    One pod: funding txids, spend txids, deliveries, closing txs, anomalies, and the exact transactions the
+    ledger never recorded (<code>unrecordedOnChain</code>, <code>unbookedPayouts</code>).</div></div></div>
+  <div class="row"><div class="m gett">GET</div><div><div class="path">/api/rules</div><div class="desc">
+    The covenant's rules, derived from the same <code>RULES</code> map used to explain refusals, with
+    <code>guard: true</code> on the ones the pre-execution guard also enforces.</div></div></div>
+  <div class="row"><div class="m gett">GET</div><div><div class="path">/api/run.json</div><div class="desc">
+    302 to <code>/data.json</code> — the recorded run, one shape, no second copy.</div></div></div>
+  <div class="row"><div class="m gett">GET</div><div><div class="path">/api/phases</div><div class="desc">
+    The spend-path state machine, generated from the compiled artifact by <code>scripts/phases.mjs</code>.</div></div></div>
+
+  <h2>Wallet connector (WizardConnect)</h2>
+  <p>Nothing above requires a key on the server if the client brings their own wallet. The flow is:
+  the server opens a <code>wiz://</code> relay session, the browser renders it as a QR, the phone scans it,
+  and the server then asks <em>the phone</em> to sign the funding transaction. The server re-checks the
+  signature and the amount against the covenant before it broadcasts — a wallet that returns the wrong
+  transaction simply gets rejected.</p>
+  <div class="row"><div class="m post">POST</div><div><div class="path">/api/wallet/connect</div><div class="desc">Open a pairing session. Returns <code>{ uri, qr (inline SVG), connected, wallet }</code>.</div></div></div>
+  <div class="row"><div class="m gett">GET</div><div><div class="path">/api/wallet/status</div><div class="desc">Connection state, wallet name, and the last protocol events (poll every couple of seconds while the QR is up).</div></div></div>
+  <div class="row"><div class="m gett">GET</div><div><div class="path">/api/wallet/utxos</div><div class="desc">Derived receive addresses and their live balances, so the page can tell you what the wallet can actually fund.</div></div></div>
+  <div class="row"><div class="m post">POST</div><div><div class="path">/api/wallet/xpub</div><div class="desc">No phone? Paste an account xpub; the server derives the same addresses read-only.</div></div></div>
+  <div class="row"><div class="m post">POST</div><div><div class="path">/api/pods/:id/fund-wallet</div><div class="desc">Build → sign on the phone over the relay → verify locally → broadcast. Body: <code>{ satoshis }</code>. Returns <code>{ txid, walletCheck, spends, fee, change }</code>.</div></div></div>
+  <div class="row"><div class="m gett">GET</div><div><div class="path">/api/pods</div><div class="desc">Every pod this session, with live balances — the dashboard reads this.</div></div></div>
+  <div class="row"><div class="m gett">GET</div><div><div class="path">/api/pods/:id</div><div class="desc">One pod, live.</div></div></div>
+
+  <h2>An agent using it</h2>
+<pre>const API = "http://localhost:4173";
+
+// 1. the agent opens a job: 20,000 sat per chunk, 60,000 sat window, 24 blocks
+const pod = await (await fetch(`${API}/api/pods`, {
+  method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ chunk: 20000, window: 60000, blocks: 24 }),
+})).json();
+
+// 2. it pre-authorises a budget. The money is not in a hot wallet.
+await fetch(`${API}/api/pods/${pod.id}/fund`, {
+  method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ satoshis: 100000 }),
+});
+
+// 3. the provider does work, then pulls exactly one chunk
+const paid = await (await fetch(`${API}/api/pods/${pod.id}/deliver`, {
+  method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ chunks: 1, payload: completion }),
+})).json();
+
+// 4. anyone can verify the payment from chain, not from the server's word
+const proof = await (await fetch(`${API}/api/verify/${paid.txid}`)).json();
+console.log(proof.matchesExpected, proof.paidToProvider);
+
+// 5. before the NEXT pull, ask the guard. A refusal costs nothing and can be retried
+//    with a smaller amount; the same intent id never produces a second decision.
+const ask = await (await fetch(`${API}/api/pods/${pod.id}/intent`, {
+  method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ action: "deliver", amount: 1000000, id: "attempt-7" }),
+})).json();
+if (ask.verdict !== "pass") return planAround(ask.code);   // e.g. "deliver.window"
+
+// 6. when the job ends, let the chain audit its own paperwork
+const books = await (await fetch(`${API}/api/reconcile`)).json();
+console.log(books.totals.balanceToTheSatoshi, "/", books.totals.pods, "balance to the satoshi");</pre>
+
+  <h2>Receipts</h2>
+  <p class="desc">Every delivery returns a receipt so a provider can prove what it served and that it was paid:</p>
+<pre>{
+  "jobHash":     "sha256(canonical job definition)",   // binds the receipt to the pod parameters
+  "index":       2,
+  "payloadHash": "sha256(the delivered work)",
+  "txid":        "…",                                   // the real payment
+  "paidSats":    "20000",
+  "hash":        "sha256(all of the above)"
+}</pre>
+  <p class="desc">The covenant doesn't verify the payload — it enforces money, not truth. The receipt is the honest
+  seam: the payer can challenge a payload hash, the provider can prove payment. A production version puts the payload
+  hash in the chunk commitment so disagreement is visible on chain.</p>
+
+  <h2>Run it</h2>
+<pre>npm install
+npm test            # 16 covenant tests against the real BCH VM
+node server.mjs     # the app + this API on :4173
+node scripts/demo.mjs        # a full run on Chipnet, writes web/data.json
+node scripts/batch-run.mjs   # the batching measurement (1→16 chunks per tx)</pre>
+
+  <p class="desc" style="margin-top:24px"><a href="../">← back to the app</a></p>
+</div>
+</body>
+</html>

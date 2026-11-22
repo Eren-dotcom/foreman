@@ -1,0 +1,240 @@
+{
+  "contractName": "ChunkPod",
+  "constructorInputs": [
+    {
+      "name": "clientPkh",
+      "type": "bytes20"
+    },
+    {
+      "name": "providerPkh",
+      "type": "bytes20"
+    },
+    {
+      "name": "chunk",
+      "type": "int"
+    },
+    {
+      "name": "window",
+      "type": "int"
+    },
+    {
+      "name": "validUntil",
+      "type": "int"
+    }
+  ],
+  "abi": [
+    {
+      "name": "deliver",
+      "inputs": [
+        {
+          "name": "providerPk",
+          "type": "pubkey"
+        },
+        {
+          "name": "providerSig",
+          "type": "sig"
+        }
+      ]
+    },
+    {
+      "name": "refund",
+      "inputs": [
+        {
+          "name": "clientPk",
+          "type": "pubkey"
+        },
+        {
+          "name": "clientSig",
+          "type": "sig"
+        }
+      ]
+    },
+    {
+      "name": "close",
+      "inputs": [
+        {
+          "name": "clientPk",
+          "type": "pubkey"
+        },
+        {
+          "name": "clientSig",
+          "type": "sig"
+        },
+        {
+          "name": "providerPk",
+          "type": "pubkey"
+        },
+        {
+          "name": "providerSig",
+          "type": "sig"
+        }
+      ]
+    }
+  ],
+  "bytecode": "OP_5 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_6 OP_PICK OP_HASH160 OP_2 OP_PICK OP_EQUALVERIFY OP_7 OP_ROLL OP_7 OP_ROLL OP_CHECKSIGVERIFY OP_TXINPUTCOUNT OP_1 OP_NUMEQUALVERIFY OP_INPUTINDEX OP_UTXOVALUE OP_0 OP_OUTPUTVALUE OP_DUP OP_5 OP_PICK OP_GREATERTHANOREQUAL OP_VERIFY OP_DUP OP_6 OP_ROLL OP_LESSTHANOREQUAL OP_VERIFY OP_DUP OP_5 OP_ROLL OP_MOD OP_0 OP_NUMEQUALVERIFY OP_2DUP bc02 OP_ADD OP_GREATERTHANOREQUAL OP_VERIFY 76a914 OP_4 OP_ROLL OP_CAT 88ac OP_CAT OP_0 OP_OUTPUTBYTECODE OP_EQUALVERIFY OP_TXOUTPUTCOUNT OP_2 OP_NUMEQUALVERIFY OP_1 OP_OUTPUTBYTECODE OP_INPUTINDEX OP_UTXOBYTECODE OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE OP_ROT OP_ROT OP_SUB bc02 OP_SUB OP_NUMEQUAL OP_NIP OP_NIP OP_NIP OP_ELSE OP_5 OP_PICK OP_1 OP_NUMEQUAL OP_IF OP_6 OP_PICK OP_HASH160 OP_OVER OP_EQUALVERIFY OP_7 OP_ROLL OP_7 OP_ROLL OP_CHECKSIGVERIFY OP_4 OP_ROLL OP_CHECKLOCKTIMEVERIFY OP_DROP OP_TXINPUTCOUNT OP_1 OP_NUMEQUALVERIFY 76a914 OP_SWAP OP_CAT 88ac OP_CAT OP_TXOUTPUTCOUNT OP_1 OP_NUMEQUALVERIFY OP_0 OP_OUTPUTBYTECODE OP_EQUALVERIFY OP_0 OP_OUTPUTVALUE OP_INPUTINDEX OP_UTXOVALUE 5802 OP_SUB OP_NUMEQUALVERIFY OP_2DROP OP_2DROP OP_1 OP_ELSE OP_5 OP_ROLL OP_2 OP_NUMEQUALVERIFY OP_5 OP_PICK OP_HASH160 OP_OVER OP_EQUALVERIFY OP_7 OP_PICK OP_HASH160 OP_2 OP_PICK OP_EQUALVERIFY OP_6 OP_ROLL OP_6 OP_ROLL OP_CHECKSIGVERIFY OP_6 OP_ROLL OP_6 OP_ROLL OP_CHECKSIGVERIFY OP_TXINPUTCOUNT OP_1 OP_NUMEQUALVERIFY OP_INPUTINDEX OP_UTXOVALUE OP_0 OP_OUTPUTVALUE OP_DUP OP_5 OP_ROLL OP_MOD OP_0 OP_NUMEQUALVERIFY OP_OVER OP_SWAP 2003 OP_ADD OP_GREATERTHANOREQUAL OP_VERIFY 76a914 OP_3 OP_ROLL OP_CAT 88ac OP_CAT 76a914 OP_3 OP_ROLL OP_CAT 88ac OP_CAT OP_TXOUTPUTCOUNT OP_2 OP_NUMEQUALVERIFY OP_0 OP_OUTPUTBYTECODE OP_ROT OP_EQUALVERIFY OP_1 OP_OUTPUTBYTECODE OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE OP_SWAP 2003 OP_SUB OP_0 OP_OUTPUTVALUE OP_SUB OP_NUMEQUAL OP_NIP OP_NIP OP_ENDIF OP_ENDIF",
+  "source": "pragma cashscript ^0.14.0;\n\n// Fee budgets per spend path. Deterministic so the covenant can check the\n// remainder to the satoshi; a production build would use a fee policy.\nint constant FEE = 700;\nint constant REFUND_FEE = 600;\nint constant CLOSE_FEE = 800;\n\n/*\n * ChunkPod — a pre-authorized, bounded payment channel for AI-driven work.\n *\n * The client funds one coin (\"pod\"). A provider (an AI agent, a GPU node, an\n * inference worker) is paid per delivered chunk, but can never take more than\n * `window` sats in a single transaction. Everything not taken returns to the\n * same contract address, so the pod carries its own state in the coin.\n * After `validUntil` the client takes the remainder back — authority expires,\n * like a pre-authorized card, instead of sitting in a hot wallet forever.\n *\n * Outputs for deliver():\n *   [0] provider P2PKH  = paid chunk value\n *   [1] this pod         = held - paid - FEE\n */\ncontract ChunkPod(\n    bytes20 clientPkh,      // client's HASH160 — reclaims the remainder\n    bytes20 providerPkh,    // provider's HASH160 — paid per chunk\n    int chunk,              // sats authorised per delivered chunk (== ceil of work unit)\n    int window,             // max sats payable in ANY single tx (blast-radius cap)\n    int validUntil          // block height after which only the client can spend\n) {\n    // Provider pulls payment for one or more delivered chunks.\n    function deliver(pubkey providerPk, sig providerSig) {\n        // Only the authorised provider can pull.\n        require(hash160(providerPk) == providerPkh);\n        require(checkSig(providerSig, providerPk));\n\n        // One pod input only: prevents merging/overdraw across pods.\n        require(tx.inputs.length == 1);\n\n        int held = tx.inputs[this.activeInputIndex].value;\n\n        // Pay at least one chunk, at most `window` in this transaction.\n        int paid = tx.outputs[0].value;\n        require(paid >= chunk);\n        require(paid <= window);\n        require(paid % chunk == 0);           // whole chunks only\n        require(held >= paid + FEE);\n\n        bytes25 providerLockingBytecode = new LockingBytecodeP2PKH(providerPkh);\n        require(tx.outputs[0].lockingBytecode == providerLockingBytecode);\n\n        // Everything else stays in the pod: same locking bytecode, exact amount.\n        require(tx.outputs.length == 2);\n        require(tx.outputs[1].lockingBytecode == tx.inputs[this.activeInputIndex].lockingBytecode);\n        require(tx.outputs[1].value == held - paid - FEE);\n    }\n\n    // After expiry the client recovers everything that is left.\n    // Authority expires, the money does not.\n    function refund(pubkey clientPk, sig clientSig) {\n        require(hash160(clientPk) == clientPkh);\n        require(checkSig(clientSig, clientPk));\n\n        // Absolute (height-based) expiry, enforced by the network.\n        require(tx.time >= validUntil);\n        require(tx.inputs.length == 1);\n\n        bytes25 clientLockingBytecode = new LockingBytecodeP2PKH(clientPkh);\n        require(tx.outputs.length == 1);\n        require(tx.outputs[0].lockingBytecode == clientLockingBytecode);\n        require(tx.outputs[0].value == tx.inputs[this.activeInputIndex].value - REFUND_FEE);\n    }\n\n    // Mutual close: both parties agree, provider paid now, client gets the rest.\n    function close(\n        pubkey clientPk, sig clientSig,\n        pubkey providerPk, sig providerSig\n    ) {\n        require(hash160(clientPk) == clientPkh);\n        require(hash160(providerPk) == providerPkh);\n        require(checkSig(clientSig, clientPk));\n        require(checkSig(providerSig, providerPk));\n\n        require(tx.inputs.length == 1);\n        int held = tx.inputs[this.activeInputIndex].value;\n        int paid = tx.outputs[0].value;\n\n        require(paid % chunk == 0);\n        require(held >= paid + CLOSE_FEE);\n\n        bytes25 providerLockingBytecode = new LockingBytecodeP2PKH(providerPkh);\n        bytes25 clientLockingBytecode = new LockingBytecodeP2PKH(clientPkh);\n        require(tx.outputs.length == 2);\n        require(tx.outputs[0].lockingBytecode == providerLockingBytecode);\n        require(tx.outputs[1].lockingBytecode == clientLockingBytecode);\n        require(tx.outputs[1].value == held - CLOSE_FEE - tx.outputs[0].value);\n    }\n}\n",
+  "fingerprint": "f156d8274d862e75e582e67ff9fdf90c0486a527da98bd61dc5abbb0156ed637",
+  "debug": {
+    "bytecode": "5579009c635679a9527988577a577aadc3519dc0c600cc765579a26976567aa16976557a97009d6e02bc0293a2690376a914547a7e0288ac7e00cd88c4529d51cdc0c78851cc7b7b9402bc02949c777777675579519c635679a97888577a577aad547ab175c3519d0376a9147c7e0288ac7ec4519d00cd8800ccc0c6025802949d6d6d5167557a529d5579a978885779a9527988567a567aad567a567aadc3519dc0c600cc76557a97009d787c02200393a2690376a914537a7e0288ac7e0376a914537a7e0288ac7ec4529d00cd7b8851cd8851cc7c0220039400cc949c77776868",
+    "sourceMap": "31:4:55:5;;;;;33:24:33:34;;:16::35:1;:39::50:0;;:8::52:1;34:25:34:36:0;;:38::48;;:8::51:1;37:16:37:32:0;:36::37;:8::39:1;39:29:39:50:0;:19::57:1;42:30:42:31:0;:19::38:1;43:16:43:20:0;:24::29;;:16:::1;:8::31;44:16:44:20:0;:24::30;;:16:::1;:8::32;45:16:45:20:0;:23::28;;:16:::1;:32::33:0;:8::35:1;46:16:46:28:0;:31::34:1;:24;:16;:8::36;48:42:48:79:0;:67::78;;:42::79:1;;;49:27:49:28:0;:16::45:1;:8::74;52:16:52:33:0;:37::38;:8::40:1;53:27:53:28:0;:16::45:1;:59::80:0;:49::97:1;:8::99;54:27:54:28:0;:16::35:1;:39::43:0;:46::50;:39:::1;:53::56;:39;:8::58;31:57:55:5;;;:4;59::71::0;;;;;60:24:60:32;;:16::33:1;:37::46:0;:8::48:1;61:25:61:34:0;;:36::44;;:8::47:1;64:27:64:37:0;;:8::39:1;;65:16:65:32:0;:36::37;:8::39:1;67:40:67:75:0;:65::74;:40::75:1;;;68:16:68:33:0;:37::38;:8::40:1;69:27:69:28:0;:16::45:1;:8::72;70:27:70:28:0;:16::35:1;:49::70:0;:39::77:1;:80::90;:39;:8::92;59:52:71:5;;;:4;74::96::0;;;;78:24:78:32;;:16::33:1;:37::46:0;:8::48:1;79:24:79:34:0;;:16::35:1;:39::50:0;;:8::52:1;80:25:80:34:0;;:36::44;;:8::47:1;81:25:81:36:0;;:38::48;;:8::51:1;83:16:83:32:0;:36::37;:8::39:1;84:29:84:50:0;:19::57:1;85:30:85:31:0;:19::38:1;87:16:87:20:0;:23::28;;:16:::1;:32::33:0;:8::35:1;88:16:88:20:0;:24::28;:31::40:1;:24;:16;:8::42;90:42:90:79:0;:67::78;;:42::79:1;;;91:40:91:75:0;:65::74;;:40::75:1;;;92:16:92:33:0;:37::38;:8::40:1;93:27:93:28:0;:16::45:1;:49::72:0;:8::74:1;94:27:94:28:0;:16::45:1;:8::72;95:27:95:28:0;:16::35:1;:39::43:0;:46::55:1;:39;:69::70:0;:58::77:1;:39;:8::79;77:6:96:5;;23:0:97:1;",
+    "logs": [],
+    "requires": [
+      {
+        "ip": 15,
+        "line": 33
+      },
+      {
+        "ip": 20,
+        "line": 34
+      },
+      {
+        "ip": 23,
+        "line": 37
+      },
+      {
+        "ip": 32,
+        "line": 43
+      },
+      {
+        "ip": 37,
+        "line": 44
+      },
+      {
+        "ip": 43,
+        "line": 45
+      },
+      {
+        "ip": 48,
+        "line": 46
+      },
+      {
+        "ip": 57,
+        "line": 49
+      },
+      {
+        "ip": 60,
+        "line": 52
+      },
+      {
+        "ip": 65,
+        "line": 53
+      },
+      {
+        "ip": 74,
+        "line": 54
+      },
+      {
+        "ip": 87,
+        "line": 60
+      },
+      {
+        "ip": 92,
+        "line": 61
+      },
+      {
+        "ip": 95,
+        "line": 64
+      },
+      {
+        "ip": 99,
+        "line": 65
+      },
+      {
+        "ip": 107,
+        "line": 68
+      },
+      {
+        "ip": 110,
+        "line": 69
+      },
+      {
+        "ip": 117,
+        "line": 70
+      },
+      {
+        "ip": 130,
+        "line": 78
+      },
+      {
+        "ip": 136,
+        "line": 79
+      },
+      {
+        "ip": 141,
+        "line": 80
+      },
+      {
+        "ip": 146,
+        "line": 81
+      },
+      {
+        "ip": 149,
+        "line": 83
+      },
+      {
+        "ip": 159,
+        "line": 87
+      },
+      {
+        "ip": 165,
+        "line": 88
+      },
+      {
+        "ip": 180,
+        "line": 92
+      },
+      {
+        "ip": 184,
+        "line": 93
+      },
+      {
+        "ip": 187,
+        "line": 94
+      },
+      {
+        "ip": 197,
+        "line": 95
+      }
+    ],
+    "sourceTags": "69:71:sc;192:193:sc",
+    "functions": [
+      {
+        "name": "FEE",
+        "kind": "constant",
+        "inputs": [],
+        "bytecode": "02bc02",
+        "sourceMap": "5:19:5:22",
+        "logs": [],
+        "requires": []
+      },
+      {
+        "name": "REFUND_FEE",
+        "kind": "constant",
+        "inputs": [],
+        "bytecode": "025802",
+        "sourceMap": "6:26:6:29",
+        "logs": [],
+        "requires": []
+      },
+      {
+        "name": "CLOSE_FEE",
+        "kind": "constant",
+        "inputs": [],
+        "bytecode": "022003",
+        "sourceMap": "7:25:7:28",
+        "logs": [],
+        "requires": []
+      }
+    ],
+    "inlineRanges": "45:45:FEE;71:71:FEE;115:115:REFUND_FEE;162:162:CLOSE_FEE;191:191:CLOSE_FEE"
+  },
+  "compiler": {
+    "name": "cashc",
+    "version": "0.14.0",
+    "options": {
+      "enforceFunctionParameterTypes": true,
+      "enforceLocktimeGuard": true
+    }
+  },
+  "updatedAt": "2026-11-22T09:41:01.799Z"
+}

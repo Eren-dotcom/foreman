@@ -1,0 +1,74 @@
+{
+  "contract": "ChunkPod",
+  "bytecodeBytes": 930,
+  "functions": [
+    "deliver",
+    "refund",
+    "close"
+  ],
+  "states": [
+    {
+      "id": "Fresh",
+      "label": "Fresh",
+      "detail": "address exists, holds nothing",
+      "terminal": false
+    },
+    {
+      "id": "Funded",
+      "label": "Funded",
+      "detail": "client pre-authorised a budget",
+      "terminal": false
+    },
+    {
+      "id": "Closed",
+      "label": "Closed",
+      "detail": "nothing left to spend",
+      "terminal": true
+    }
+  ],
+  "edges": [
+    {
+      "fn": "deliver",
+      "from": "Funded",
+      "to": "Funded",
+      "who": "provider",
+      "guard": "whole chunks · ≤ window · payee pinned",
+      "note": "remainder returns to the same pod, to the satoshi",
+      "args": [
+        "providerPk",
+        "providerSig"
+      ],
+      "terminal": false
+    },
+    {
+      "fn": "refund",
+      "from": "Funded",
+      "to": "Closed",
+      "who": "client",
+      "guard": "tx.time ≥ validUntil · exact remainder − 600 sat fee",
+      "note": "the client takes back what was never delivered",
+      "args": [
+        "clientPk",
+        "clientSig"
+      ],
+      "terminal": true
+    },
+    {
+      "fn": "close",
+      "from": "Funded",
+      "to": "Closed",
+      "who": "client + provider",
+      "guard": "both signatures · whole chunks · exact split",
+      "note": "mutual exit, no expiry needed",
+      "args": [
+        "clientPk",
+        "clientSig",
+        "providerPk",
+        "providerSig"
+      ],
+      "terminal": true
+    }
+  ],
+  "mermaid": "stateDiagram-v2\n  [*] --> Fresh: client computes the pod address\n  Fresh --> Funded: fund (client → pod address)\n  Funded --> Funded: deliver() · provider\n  Funded --> Closed: refund() · client\n  Funded --> Closed: close() · client + provider\n  Funded --> Funded: deliver() loops until the budget runs out\n  Closed --> [*]",
+  "generatedFrom": "artifacts/ChunkPod.json"
+}
